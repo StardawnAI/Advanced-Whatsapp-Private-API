@@ -1,24 +1,38 @@
-# usecase
+# USECASE
 
-Application use cases. Each file bridges one domain to infrastructure. 1:1 mapping with domain packages.
+Generated: 2026-05-24
 
-## KEY FILES
-- `send.go` (1820 lines) — Largest. Handles all message types (text, image, video, document, sticker, audio, poll, contact, location, link)
-- `chat.go` (375 lines) — Chat list, messages, archive, pin, disappearing timer, label
-- `group.go` (614 lines) — Group CRUD, participants, settings
-- `user.go` (413 lines) — User info, avatar, privacy, contacts
-- `message.go` — Message operations (react, delete, revoke, star)
-- `app.go` — Login, logout, reconnect
-- `device.go` — Multi-device management operations
-- `newsletter.go` — Newsletter/channel operations
+## OVERVIEW
+
+Usecases orchestrate validation, device/client lookup, WhatsApp operations, storage, and response mapping.
+
+## WHERE TO LOOK
+
+| Task | Location | Notes |
+|------|----------|-------|
+| Send message/media | `send.go` | Largest file; handles text, media, links, contacts, polls, presence, and stored sent messages. |
+| Chat listing/history | `chat.go` | Device ID comes from context and must reach chat/message filters. |
+| Group operations | `group.go` | Handles participant JID conversion, names, invite links, and group settings. |
+| Account/user operations | `user.go` | Uses current device client and chat storage. |
+| Device operations | `device.go` | Delegates to `whatsapp.DeviceManager`. |
 
 ## CONVENTIONS
-- Each usecase struct: `type serviceX struct { repo, whatsmeow deps }`
-- Device context: use `deviceIDFromContext(ctx)` to get resolved device ID
-- Filter construction: build domain filter struct → pass to repository
-- Pagination: use `GetFilteredChatCount(filter)` for accurate totals (not `GetTotalChatCount`)
-- After any whatsmeow state change, update local chat storage for consistency
+
+- Constructor names are `New*Service` and return the matching domain interface.
+- Validate before doing network/storage work: `validations.Validate*`.
+- Resolve WhatsApp clients from context with `whatsapp.ClientFromContext(ctx)`.
+- For chat history, derive device scope with `deviceIDFromContext(ctx)` and pass it to repository filters.
+- For send operations, sanitize/validate phone/JID, build whatsmeow payloads, send, then store sent messages with context when appropriate.
+- Preserve existing error style: package errors from `pkg/error`, wrapped validation errors, and direct `fmt.Errorf` for contextual failures.
 
 ## ANTI-PATTERNS
-- Never return stale data after a mutation — sync local DB immediately
-- Never use unscoped queries — always pass device_id via filter or context
+
+- Do not fall back to the global client when a request has an explicit device context.
+- Do not skip validation because the REST handler already parsed the body.
+- Do not return Fiber/MCP response objects from usecases.
+- Do not perform unscoped chat/message reads from this layer.
+
+## TESTING
+
+- Existing usecase tests are narrow. Add focused tests when changing mapping, MIME/media decisions, or device-scoped chat behavior.
+- Stubs live beside tests rather than using gomock/mockery.
