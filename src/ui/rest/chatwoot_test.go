@@ -10,7 +10,7 @@ import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
 	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatwoot"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // withSignConfig sets the Chatwoot signature globals for the duration of a
@@ -39,11 +39,25 @@ func withChatwootWebhookSecret(t *testing.T, secret string) {
 
 type chatwootRouteTestRepo struct {
 	domainChatStorage.IChatStorageRepository
-	link *domainChatStorage.ChatwootMessageLink
+	link  *domainChatStorage.ChatwootMessageLink
+	count int
 }
 
-func (r *chatwootRouteTestRepo) GetLatestChatwootMessageLinkByConversation(conversationID int) (*domainChatStorage.ChatwootMessageLink, error) {
+func (r *chatwootRouteTestRepo) CountChatwootDeviceConfigs() (int, error) {
+	return r.count, nil
+}
+
+// GetLatestChatwootMessageLinkByConversation mirrors the real repo's matching
+// rules (account scope, legacy-zero wildcard, config scope) so a handler that
+// passed the wrong scope would get nil here instead of silently succeeding.
+func (r *chatwootRouteTestRepo) GetLatestChatwootMessageLinkByConversation(conversationID, accountID int, allowLegacyZero bool, configID int64) (*domainChatStorage.ChatwootMessageLink, error) {
 	if r.link == nil || r.link.ChatwootConversationID != conversationID {
+		return nil, nil
+	}
+	if r.link.ChatwootAccountID != accountID && !(allowLegacyZero && r.link.ChatwootAccountID == 0) {
+		return nil, nil
+	}
+	if configID != 0 && r.link.ChatwootConfigID != configID {
 		return nil, nil
 	}
 	cloned := *r.link
@@ -313,7 +327,7 @@ func TestResolveChatwootWebhookRoutePrefersConversationLink(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, nil)
 
 	if route.DeviceID != "device-b@s.whatsapp.net" {
 		t.Fatalf("DeviceID = %q, want device-b@s.whatsapp.net", route.DeviceID)
