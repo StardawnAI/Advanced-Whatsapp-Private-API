@@ -104,7 +104,7 @@ func registerMcpOAuth(app *fiber.App, dm *whatsapp.DeviceManager) (*mcpoauth.Ser
 	if config.AppBasePath != "" {
 		mcpRouter = app.Group(config.AppBasePath)
 	}
-	mcpRouter = mcpRouter.Group("", oauthServer.MCPAuthMiddleware(validateCredential))
+	useMcpOAuthMiddleware(mcpRouter, oauthServer.MCPAuthMiddleware(validateCredential))
 	uimcp.Register(mcpRouter, dm, uimcp.Deps{
 		App:     appUsecase,
 		Send:    sendUsecase,
@@ -115,6 +115,13 @@ func registerMcpOAuth(app *fiber.App, dm *whatsapp.DeviceManager) (*mcpoauth.Ser
 	})
 
 	return oauthServer, true, nil
+}
+
+// useMcpOAuthMiddleware limits the OAuth-or-Basic challenge to the MCP
+// transport. Mounting it on an empty-prefix group also intercepts unrelated
+// REST/UI routes registered later and replaces their normal Basic challenge.
+func useMcpOAuthMiddleware(router fiber.Router, auth fiber.Handler) {
+	router.Use("/mcp", auth)
 }
 
 func mcpOAuthCredentialValidator(credentials []string) (mcpoauth.CredentialValidator, error) {

@@ -6,7 +6,7 @@ Branch: fix/chatwoot-postgres
 
 ## OVERVIEW
 
-Go WhatsApp Web Multi-Device is a Go 1.25.5 WhatsApp Web API server. MCP is not a separate mode: the `rest`
+Go WhatsApp Web Multi-Device is a Go 1.26.0 WhatsApp Web API server. MCP is not a separate mode: the `rest`
 command serves it at `/mcp` (streamable HTTP) whenever `config.McpEnabled` is true.
 It uses whatsmeow sessions, Fiber, plain Vue 3 modules, and SQLite-backed chat/session storage by default.
 
