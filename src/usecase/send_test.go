@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -217,6 +218,42 @@ func TestWithoutCancelPreservesDeviceContext(t *testing.T) {
 	if got := inst.ID(); got != deviceID {
 		t.Fatalf("expected device id %q, got %q", deviceID, got)
 	}
+}
+
+type pollDefinitionRepoSpy struct {
+	domainChatStorage.IChatStorageRepository
+	definition *domainChatStorage.PollDefinition
+	err        error
+}
+
+func (r *pollDefinitionRepoSpy) UpsertPollDefinition(definition *domainChatStorage.PollDefinition) error {
+	r.definition = definition
+	return r.err
+}
+
+func TestPersistSentPollDefinitionStoresReadableOptions(t *testing.T) {
+	repo := &pollDefinitionRepoSpy{}
+	service := serviceSend{chatStorageRepo: repo}
+	deviceID := "628000@s.whatsapp.net"
+	ctx := whatsapp.ContextWithDevice(context.Background(), whatsapp.NewDeviceInstance(deviceID, nil, nil))
+	recipient := types.NewJID("120363000000", types.GroupServer)
+	request := domainSend.PollRequest{
+		Question:  "Lunch?",
+		Options:   []string{"Pizza", "Sushi"},
+		MaxAnswer: 1,
+	}
+
+	require.NoError(t, service.persistSentPollDefinition(ctx, recipient, "POLL-SENT-1", request))
+	require.NotNil(t, repo.definition)
+	assert.Equal(t, deviceID, repo.definition.DeviceID)
+	assert.Equal(t, recipient.String(), repo.definition.ChatJID)
+	assert.Equal(t, "POLL-SENT-1", repo.definition.PollMessageID)
+	assert.Equal(t, "Lunch?", repo.definition.Question)
+	assert.Equal(t, uint32(1), repo.definition.SelectableOptionCount)
+	assert.Equal(t, "v1", repo.definition.Version)
+	require.Len(t, repo.definition.Options, 2)
+	assert.Equal(t, "Sushi", repo.definition.Options[1].Name)
+	assert.NotEmpty(t, repo.definition.Options[1].Hash)
 }
 
 func TestResolveDocumentMIME(t *testing.T) {
